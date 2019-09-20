@@ -1,0 +1,15 @@
+{
+  "name": "reversegif",
+  "version": "1.0.0",
+  "description": "Convert video to Gif with reversal effect",
+  "main": "index.js",
+  "dependencies": {
+    "fluent-ffmpeg": "^2.1.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Joy Prakash Sharma",
+  "license": "MIT"
+}
