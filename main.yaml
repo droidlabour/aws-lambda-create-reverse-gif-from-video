@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Convert mp4/mov to gif or img if thumbnail length > video length
+Parameters:
+  LambdaS3Bucket:
+    Description: S3 bucket for lambda package (in zip).
+    Type: String
+  LambdaS3Key:
+    Description: S3 object name (in zip) for lambda package.
+    Type: String
+  ThumbnailLength:
+    Description: GIF thumbnail duration.
+    Type: String
+    Default: 2000
+
+Resources:
+  ConvertGifSns:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Ref AWS::StackName
+  ChangeTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AllowBucketToPushNotificationEffect
+          Effect: Allow
+          Principal:
+            Service: s3.amazonaws.com
+          Action: sns:Publish
+          Resource: "*"
+      Topics:
+      - Ref: ConvertGifSns
+  VideoSourceS3Bucket:
+    Type: AWS::S3::Bucket
+    DependsOn: ConvertGifSns
+    Properties:
+      NotificationConfiguration:
+        TopicConfigurations:
+          -
+            Topic: !Ref ConvertGifSns
+            Event: "s3:ObjectCreated:*"
+            Filter:
+              S3Key:
+                Rules:
+                  -
+                    Name: suffix
+                    Value: mp4
+          -
+            Topic: !Ref ConvertGifSns
+            Event: "s3:ObjectCreated:*"
+            Filter:
+              S3Key:
+                Rules:
+                  -
+                    Name: suffix
+                    Value: mov
+  GifTargetS3Bucket:
+    Type: AWS::S3::Bucket
+  ConvertGifSnsSub:
+    Type: AWS::SNS::Subscription
+    DependsOn: ConvertGifLambdaInvokePermission
+    Properties:
+      Endpoint: !GetAtt ConvertGifLambda.Arn
+      Protocol: lambda
+      TopicArn: !Ref ConvertGifSns
+  FfmpegLambdaLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+      - nodejs10.x
+      - python3.6
+      - ruby2.5
+      - java8
+      - go1.x
+      Content:
+        S3Bucket: awsserverlessrepo-changesets-plntc6bfnfj
+        S3Key: 142700881312-1fc0da99-81d9-49d0-9972-8db310c3fc72
+      Description: FFMPEG for AWS Lambda
+      LayerName: ffmpeg
+      LicenseInfo: GPL-2.0-or-later
+  ConvertGifLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ConvertGifLambda.Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref ConvertGifSns
+  ConvertGifLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: !Ref AWS::StackName
+      Handler: index.handler
+      Code:
+        S3Bucket: !Ref LambdaS3Bucket
+        S3Key: !Ref LambdaS3Key
+      Layers:
+        - !Ref FfmpegLambdaLayer
+      Role:
+        'Fn::GetAtt':
+          - ConvertGifLambdaExecRole
+          - Arn
+      Environment:
+        Variables:
+          targetS3Bucket: !Ref GifTargetS3Bucket
+          thumbnailLength: !Ref ThumbnailLength
+      Runtime: nodejs10.x
+      Timeout: 900
+      MemorySize: 2048
+  ConvertGifLambdaExecRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+Outputs:
+  SourceS3Bucket:
+    Description: S3 bucket where mp4/mov files will be uploaded.
+    Value: !Ref VideoSourceS3Bucket
+  TargetS3Bucket:
+    Description: S3 bucket where gif/img files will be uploaded by Lambda.
+    Value: !Ref GifTargetS3Bucket
