@@ -41,7 +41,7 @@ exports.handler = (event, context, callback) => {
     .then(function(seek) {
         if (seek.seekPoint > 0) {
             console.log('I will convert to gif');
-            return gifHandler(vidFname, seek.seekPoint, thumbnailSec, parsedFname);
+            return gifHandler(vidFname, seek.seekPoint, thumbnailSec/2, parsedFname);
         } else {
             console.log('I will convert to img');
             seekPoint = seek.metadata.format.duration/2;
